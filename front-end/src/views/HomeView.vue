@@ -37,8 +37,8 @@
       async fetchGraphData() {
         try {
           const response = await fetch('/api/graphs'); 
-          console.log(response);
           const data = await response.json();
+          console.log(data);
   
           this.graphs = data.map(item => ({
             chartData: {
