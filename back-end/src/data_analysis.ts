@@ -1,6 +1,5 @@
 import fs from 'fs';
 import csv from 'csv-parser';
-import { group } from 'console';
 
 enum VisitTimestamp {
     BEFORE,
@@ -8,7 +7,7 @@ enum VisitTimestamp {
     AFTER
 }
 
-export interface RawDataRow {
+interface RawDataRow {
     propulso_id: string;
     lat: number;
     lon: number;
@@ -16,14 +15,14 @@ export interface RawDataRow {
     timestamp: number
 }
 
-export interface GraphData {
+interface GraphData {
     title: string,
     chartType: string,
     labels: string[],
     data: number[]
 }
 
-export interface Visit {
+interface Visit {
     visitor_id: string,
     start: number,
     end: number,
@@ -37,20 +36,28 @@ export function analyze_csv() : Promise<GraphData[]> {
         const results: RawDataRow[] = [];
         try {
 
-            fs.createReadStream('data/dataset_pathing_expanded.csv')
+            fs.createReadStream('data/dataset_pathing_extra_light.csv')
             .pipe(csv())
             .on('data', (data) => {
-                results.push(data);
+                const parsedData: RawDataRow = {
+                    propulso_id: data.propulso_id,
+                    lat: parseFloat(data.lat),
+                    lon: parseFloat(data.lon),
+                    delta_time: parseInt(data.delta_time),
+                    timestamp: parseInt(data.timestamp)
+                };
+                results.push(parsedData);
             })
             .on('end', () => {
                 
-                results.sort((a, b) => b.timestamp - a.timestamp)
+                results.sort((a, b) => a.timestamp - b.timestamp)
                 const visits = getVisits(results);
                 const visitsPerMonth = getVisitsPerMonth(visits)
 
                 const graphData: GraphData[] = [
                     visitCountsPerMonth(visitsPerMonth),
-                    
+                    visitorCountsPerMonth(visitsPerMonth),
+                    visitLengthPerMonth(visitsPerMonth)
                 ];
                 resolve(graphData);
             });
@@ -89,17 +96,13 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
         let visitState: VisitTimestamp = VisitTimestamp.BEFORE;
         for (const item in pings) {
             const ping = pings[item];
-
+            
             if (visitState == VisitTimestamp.AFTER && ping.delta_time > 0) {
                 visitState = VisitTimestamp.BEFORE;
-            }
-
-            if (visitState == VisitTimestamp.BEFORE && ping.delta_time == 0) {
+            } else if (visitState == VisitTimestamp.BEFORE && ping.delta_time == 0) {
                 visitState = VisitTimestamp.IN;
                 currentVisit.start = ping.timestamp;
-            }
-
-            if (visitState == VisitTimestamp.IN && ping.delta_time < 0) {
+            } else if (visitState == VisitTimestamp.IN && ping.delta_time < 0) {
                 visitState = VisitTimestamp.AFTER;
                 currentVisit.duration = ping.timestamp - currentVisit.start;
                 currentVisit.end = ping.timestamp;
@@ -120,17 +123,18 @@ function getVisitsPerMonth(visits: Visit[]) {
     const visitsPerMonth = visits.reduce((acc, visit) => {
         const monthYear: string = (new Date(visit.start * 1000).getMonth() + 1).toString();
         if (!acc[monthYear]) {
-            acc[monthYear] = 0;
+            acc[monthYear] = [];
         }
-        acc[monthYear]++;
+        acc[monthYear].push(visit);
         return acc;
-    }, {} as { [key: string]: number });
+    }, {} as { [key: string]: Visit[] });
 
     return visitsPerMonth
 }
 
-function visitCountsPerMonth(visitsPerMonth: { [key: string]: number; }) {
-    const visitCounts: number[] = Object.keys(visitsPerMonth).sort().map(key => visitsPerMonth[key]);
+function visitCountsPerMonth(visitsPerMonth: { [key: string]: Visit[]; }) {
+    const sortedKeys = Object.keys(visitsPerMonth).sort();
+    const visitCounts: number[] = sortedKeys.map(key => visitsPerMonth[key].length);
 
     const visitsPerMonthGraphData: GraphData = {
         title: 'Visites par mois',
@@ -139,4 +143,50 @@ function visitCountsPerMonth(visitsPerMonth: { [key: string]: number; }) {
         data: visitCounts
     };
     return visitsPerMonthGraphData;
+}
+
+function visitorCountsPerMonth(visitsPerMonth: { [key: string]: Visit[]; }) {
+
+    const sortedKeys = Object.keys(visitsPerMonth).sort();
+    const visitorCounts: number[] = sortedKeys.map(month => {
+        const visits = visitsPerMonth[month];
+        const uniqueVisitors = new Set<string>();
+      
+        visits.forEach(visit => {
+          uniqueVisitors.add(visit.visitor_id);
+        });
+      
+        return uniqueVisitors.size;
+    });
+
+    const visitorsPerMonthGraphData: GraphData = {
+        title: 'Visiteurs par mois',
+        chartType: 'bar',
+        labels: ['JAN', 'FEV', 'MAR', 'AVR', 'MAI', 'JUN', 'JUI', 'AOU', 'SEP', 'OCT', 'NOV', 'DEC'],
+        data: visitorCounts
+    };
+    return visitorsPerMonthGraphData;
+}
+
+function visitLengthPerMonth(visitsPerMonth: { [key: string]: Visit[]; }) {
+    const sortedKeys = Object.keys(visitsPerMonth).sort();
+
+    const averageVisitLength: number[] = sortedKeys.map(month => {
+        const visits = visitsPerMonth[month];
+        const totalDuration = visits.reduce((sum, visit) => sum + visit.duration, 0);
+        const averageDuration = totalDuration / visits.length;
+
+        const hours = Math.floor(averageDuration / 3600);
+        const minutes = Math.floor((averageDuration % 3600) / 60);
+        
+        return hours + (minutes / 60);
+    });
+
+    const visitLengthPerMonthGraphData: GraphData = {
+        title: 'Durée moyenne (h) des visites par mois',
+        chartType: 'bar',
+        labels: ['JAN', 'FEV', 'MAR', 'AVR', 'MAI', 'JUN', 'JUI', 'AOU', 'SEP', 'OCT', 'NOV', 'DEC'],
+        data: averageVisitLength
+    };
+    return visitLengthPerMonthGraphData;
 }
