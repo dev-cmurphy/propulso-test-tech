@@ -36,7 +36,8 @@
     methods: {
       async fetchGraphData() {
         try {
-          const response = await fetch('http://localhost:3000/graphs'); 
+          const response = await fetch('/api/graphs'); 
+          console.log(response);
           const data = await response.json();
   
           this.graphs = data.map(item => ({

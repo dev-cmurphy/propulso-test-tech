@@ -4,8 +4,12 @@ import { analyze_csv } from './data_analysis';
 
 const app = express();
 const port = 3000;
-
-app.use(cors());
+const corsOptions = {
+    origin: 'http://localhost:8081',
+    optionsSuccessStatus: 200
+};
+  
+app.use(cors(corsOptions));
 
 app.get('/graphs', (req, res) => {
     analyze_csv().then((results) => {
