@@ -10,7 +10,7 @@ export function analyze_csv() : Promise<GraphData[]> {
         const results: RawDataRow[] = [];
         try {
 
-            fs.createReadStream('data/dataset_pathing_expanded.csv')
+            fs.createReadStream('data/dataset_pathing_extra_light.csv')
             .pipe(csv())
             .on('data', (data) => {
                 const parsedData: RawDataRow = {
@@ -83,6 +83,12 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
             // donc, à chaque fois qu'on passe d'un zéro à un non-zéro, on enregistre une visite 
             // (mais pas d'un non-zéro à un zéro)
 
+            // visite VS déplacement
+            // une visite = plage de zéros 
+            // un déplacement = plage de zéros + positif et négatifs
+            
+            // si 
+
             if (!visiting) {
                 if (ping.delta_time == 0) {
                     visiting = true;
@@ -95,6 +101,7 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
                     
                     totalDisplacement = 0;
                     totalTime = 0;
+                    lastTimestamp = -1;
                 }
             }
 
@@ -109,7 +116,7 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
     function addVisit(currentVisit: Visit, ping: RawDataRow, totalDisplacement: number, totalTime: number) {
         currentVisit.duration = ping.timestamp - currentVisit.start; // pour éviter d'avoir à le recalculer à chaque fois
         currentVisit.end = ping.timestamp;
-        // le déplacement total est relié à toutes les données sur la visite, 
+        // le déplacement total est relié à toutes les données sur la visite (avant, pendant, après), 
         // pas seulement le déplacement à l'intérieur de la zone
         currentVisit.speed = totalDisplacement / (totalTime);
 
