@@ -10,7 +10,7 @@ export function analyze_csv() : Promise<GraphData[]> {
         const results: RawDataRow[] = [];
         try {
 
-            fs.createReadStream('data/dataset_pathing_extra_light.csv')
+            fs.createReadStream('data/dataset_pathing_expanded.csv')
             .pipe(csv())
             .on('data', (data) => {
                 const parsedData: RawDataRow = {
@@ -42,6 +42,12 @@ export function analyze_csv() : Promise<GraphData[]> {
     });
 }
 
+enum VisitingState {
+    BEFORE,
+    DURING,
+    AFTER
+};
+
 
 function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
     const visits: Visit[] = [];
@@ -49,14 +55,15 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
 
     for (const visitor in groupedData) {
         const pings = groupedData[visitor];
-        let currentVisit: Visit = {
+        let currentDisplacement: Visit = {
             visitor_id: visitor,
             start: -1,
             end: -1,
             duration: -1,
             speed: -1
         };
-        let visiting: boolean = false;
+        let visitingState: VisitingState = VisitingState.BEFORE;
+        let previousState: VisitingState = visitingState;
 
         let totalDisplacement = 0;
         let totalTime = 0;
@@ -68,62 +75,75 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
 
             let currentPosition: Vector2D = [ping.lat, ping.lon];
             let currentTimestamp: number = ping.timestamp;
-            if (lastTimestamp > 0) { 
+            if (lastTimestamp > 0 && currentTimestamp > lastTimestamp) { 
                 let displacement = haversineDistance(currentPosition, lastPosition);
-                
+
                 let dt = currentTimestamp - lastTimestamp;
-                totalDisplacement += displacement;
-                totalTime += dt;
+            
+                const SPEED_TRESHOLD = 5;// on pose que ce sont des déplacements à pied, donc max 5 m/s;
+
+                if (displacement / dt < SPEED_TRESHOLD) {
+                    totalDisplacement += displacement;
+                    totalTime += dt;
+                }
+            }
+            
+            visitingState = getVisitingStateFromDt(ping.delta_time);
+            let recordVisit: boolean = false;
+
+            switch (visitingState) {
+                case VisitingState.BEFORE: 
+                    if (previousState == VisitingState.DURING) // implique qu'on a terminé une visite, sans avoir eu de ping "d'after"
+                        recordVisit = true;
+                    break;
+                case VisitingState.DURING:
+                    if (previousState != VisitingState.DURING) // implique qu'on a commencé une visite
+                        currentDisplacement.start = ping.timestamp;
+                    break;
+                case VisitingState.AFTER:
+                    if (previousState == VisitingState.DURING) // implique qu'on a terminé une visite
+                        recordVisit = true;
+                    break;
             }
 
-            // on définit une visite comme étant une plage
-            // de zéros bornée par un positif OU un négatif
-            // car il arrive parfois que les données nous présentent
-            // des visites qui ne sont pas précédées par du + et suivies de -
-            // donc, à chaque fois qu'on passe d'un zéro à un non-zéro, on enregistre une visite 
-            // (mais pas d'un non-zéro à un zéro)
-
-            // visite VS déplacement
-            // une visite = plage de zéros 
-            // un déplacement = plage de zéros + positif et négatifs
-            
-            // si 
-
-            if (!visiting) {
-                if (ping.delta_time == 0) {
-                    visiting = true;
-                    currentVisit.start = ping.timestamp;
-                }
-            } else {
-                if (ping.delta_time != 0) {
-                    visiting = false;
-                    addVisit(currentVisit, ping, totalDisplacement, totalTime);
-                    
-                    totalDisplacement = 0;
-                    totalTime = 0;
-                    lastTimestamp = -1;
-                }
+            if (recordVisit) { 
+                addVisit(currentDisplacement, ping, totalDisplacement, totalTime);
+                totalDisplacement = 0;
+                totalTime = 0;
             }
 
             lastPosition = currentPosition;
             lastTimestamp = currentTimestamp;
+
+            previousState = visitingState;
         }
     }
 
-
     return visits;
 
-    function addVisit(currentVisit: Visit, ping: RawDataRow, totalDisplacement: number, totalTime: number) {
-        currentVisit.duration = ping.timestamp - currentVisit.start; // pour éviter d'avoir à le recalculer à chaque fois
-        currentVisit.end = ping.timestamp;
+    function addVisit(currentDisplacement: Visit, ping: RawDataRow, totalDisplacement: number, totalTime: number) {
+ 
+        if (totalTime == 0) // on discarte les visites "vides" (provoquées par données "aberrantes")
+             return;
+
+        currentDisplacement.duration = ping.timestamp - currentDisplacement.start; // pour éviter d'avoir à le recalculer à chaque fois
+        currentDisplacement.end = ping.timestamp;
         // le déplacement total est relié à toutes les données sur la visite (avant, pendant, après), 
         // pas seulement le déplacement à l'intérieur de la zone
-        currentVisit.speed = totalDisplacement / (totalTime);
-
-        visits.push(currentVisit);
+        currentDisplacement.speed = totalDisplacement / (totalTime);
+        visits.push(currentDisplacement);
     }
 }
 
+
+function getVisitingStateFromDt(dt: number) {
+    if (dt == 0)
+        return VisitingState.DURING;
+    else if (dt < 0)
+        return VisitingState.AFTER;
+    
+    return VisitingState.BEFORE;
+}
 
 function groupedAndSortedRows(rawSortedfullData: RawDataRow[]): { [key: string]: RawDataRow[] } {
     return rawSortedfullData.reduce((acc, row) => {
