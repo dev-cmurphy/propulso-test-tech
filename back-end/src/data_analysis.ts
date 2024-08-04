@@ -80,7 +80,7 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
 
                 let dt = currentTimestamp - lastTimestamp;
             
-                const SPEED_TRESHOLD = 5;// on pose que ce sont des déplacements à pied, donc max 5 m/s;
+                const SPEED_TRESHOLD = 40;// on pose que ce sont des déplacements à pied ou en auto, donc max 40 m/s;
 
                 if (displacement / dt < SPEED_TRESHOLD) {
                     totalDisplacement += displacement;
