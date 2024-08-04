@@ -1,56 +1,8 @@
 import fs from 'fs';
 import csv from 'csv-parser';
-
-type Vector2D = [number, number];
-
-interface RawDataRow {
-    propulso_id: string;
-    lat: number;
-    lon: number;
-    delta_time: number;
-    timestamp: number
-}
-
-interface GraphData {
-    title: string,
-    chartType: string,
-    labels: string[],
-    data: number[]
-}
-
-interface Visit {
-    visitor_id: string,
-    start: number,
-    end: number,
-    duration: number,
-    speed: number
-}
-
-function toRadians(degrees: number): number {
-    return degrees * (Math.PI / 180);
-}
-
-function haversineDistance(coord1: Vector2D, coord2: Vector2D): number {
-    const R = 6371e3; // Earth's radius in meters
-
-    const [lat1, lon1] = coord1;
-    const [lat2, lon2] = coord2;
-
-    const φ1 = toRadians(lat1);
-    const φ2 = toRadians(lat2);
-    const Δφ = toRadians(lat2 - lat1);
-    const Δλ = toRadians(lon2 - lon1);
-
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    const distance = R * c;
-
-    return distance; // distance in meters
-}
-
+import { visitCountsPerMonth, visitorCountsPerMonth, visitLengthPerMonth, averageSpeedPerMonth } from './visit_data_per_month';
+import { Vector2D, GraphData, RawDataRow, Visit } from './types';
+import { haversineDistance } from './utils';
 
 export function analyze_csv() : Promise<GraphData[]> {
 
@@ -124,9 +76,12 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
                 totalTime += dt;
             }
 
-            // comment on définit une visite ?
             // on définit une visite comme étant une plage
             // de zéros bornée par un positif OU un négatif
+            // car il arrive parfois que les données nous présentent
+            // des visites qui ne sont pas précédées par du + et suivies de -
+            // donc, à chaque fois qu'on passe d'un zéro à un non-zéro, on enregistre une visite 
+            // (mais pas d'un non-zéro à un zéro)
 
             if (!visiting) {
                 if (ping.delta_time == 0) {
@@ -154,6 +109,8 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
     function addVisit(currentVisit: Visit, ping: RawDataRow, totalDisplacement: number, totalTime: number) {
         currentVisit.duration = ping.timestamp - currentVisit.start; // pour éviter d'avoir à le recalculer à chaque fois
         currentVisit.end = ping.timestamp;
+        // le déplacement total est relié à toutes les données sur la visite, 
+        // pas seulement le déplacement à l'intérieur de la zone
         currentVisit.speed = totalDisplacement / (totalTime);
 
         visits.push(currentVisit);
@@ -161,7 +118,7 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
 }
 
 
-function groupedAndSortedRows(rawSortedfullData: RawDataRow[]) {
+function groupedAndSortedRows(rawSortedfullData: RawDataRow[]): { [key: string]: RawDataRow[] } {
     return rawSortedfullData.reduce((acc, row) => {
         if (!acc[row.propulso_id]) {
             acc[row.propulso_id] = [];
@@ -171,7 +128,7 @@ function groupedAndSortedRows(rawSortedfullData: RawDataRow[]) {
     }, {} as { [key: string]: RawDataRow[]; });
 }
 
-function getVisitsPerMonth(visits: Visit[]) {
+function getVisitsPerMonth(visits: Visit[]): { [key: string]: Visit[] } {
     const visitsPerMonth = visits.reduce((acc, visit) => {
         const monthYear: string = (new Date(visit.start * 1000).getMonth() + 1).toString();
         if (!acc[monthYear]) {
@@ -181,84 +138,5 @@ function getVisitsPerMonth(visits: Visit[]) {
         return acc;
     }, {} as { [key: string]: Visit[] });
 
-    return visitsPerMonth
-}
-
-function visitCountsPerMonth(visitsPerMonth: { [key: string]: Visit[]; }) {
-    const sortedKeys = Object.keys(visitsPerMonth).sort();
-    const visitCounts: number[] = sortedKeys.map(key => visitsPerMonth[key].length);
-
-    const visitsPerMonthGraphData: GraphData = {
-        title: 'Visites par mois',
-        chartType: 'bar',
-        labels: ['JAN', 'FEV', 'MAR', 'AVR', 'MAI', 'JUN', 'JUI', 'AOU', 'SEP', 'OCT', 'NOV', 'DEC'],
-        data: visitCounts
-    };
-    return visitsPerMonthGraphData;
-}
-
-function visitorCountsPerMonth(visitsPerMonth: { [key: string]: Visit[]; }) {
-
-    const sortedKeys = Object.keys(visitsPerMonth).sort();
-    const visitorCounts: number[] = sortedKeys.map(month => {
-        const visits = visitsPerMonth[month];
-        const uniqueVisitors = new Set<string>();
-      
-        visits.forEach(visit => {
-          uniqueVisitors.add(visit.visitor_id);
-        });
-      
-        return uniqueVisitors.size;
-    });
-
-    const visitorsPerMonthGraphData: GraphData = {
-        title: 'Visiteurs par mois',
-        chartType: 'bar',
-        labels: ['JAN', 'FEV', 'MAR', 'AVR', 'MAI', 'JUN', 'JUI', 'AOU', 'SEP', 'OCT', 'NOV', 'DEC'],
-        data: visitorCounts
-    };
-    return visitorsPerMonthGraphData;
-}
-
-function visitLengthPerMonth(visitsPerMonth: { [key: string]: Visit[]; }) {
-    const sortedKeys = Object.keys(visitsPerMonth).sort();
-
-    const averageVisitLength: number[] = sortedKeys.map(month => {
-        const visits = visitsPerMonth[month];
-        const totalDuration = visits.reduce((sum, visit) => sum + visit.duration, 0);
-        const averageDuration = totalDuration / visits.length;
-
-        const hours = Math.floor(averageDuration / 3600);
-        const minutes = Math.floor((averageDuration % 3600) / 60);
-        
-        return hours + (minutes / 60);
-    });
-
-    const visitLengthPerMonthGraphData: GraphData = {
-        title: 'Durée moyenne (h) des visites par mois',
-        chartType: 'bar',
-        labels: ['JAN', 'FEV', 'MAR', 'AVR', 'MAI', 'JUN', 'JUI', 'AOU', 'SEP', 'OCT', 'NOV', 'DEC'],
-        data: averageVisitLength
-    };
-    return visitLengthPerMonthGraphData;
-}
-
-function averageSpeedPerMonth(visitsPerMonth: { [key: string]: Visit[]; }) {
-    const sortedKeys = Object.keys(visitsPerMonth).sort();
-
-    const averageSpeed: number[] = sortedKeys.map(month => {
-        const visits = visitsPerMonth[month];
-        const totalSpeed = visits.reduce((sum, visit) => sum + visit.speed, 0);
-        const averageSpeedThisMonth = totalSpeed / visits.length;
-
-        return averageSpeedThisMonth * 3.6; // m/s => km/h ?
-    });
-
-    const visitLengthPerMonthGraphData: GraphData = {
-        title: 'Vitesse moyenne des déplacements par mois',
-        chartType: 'bar',
-        labels: ['JAN', 'FEV', 'MAR', 'AVR', 'MAI', 'JUN', 'JUI', 'AOU', 'SEP', 'OCT', 'NOV', 'DEC'],
-        data: averageSpeed
-    };
-    return visitLengthPerMonthGraphData;
+    return visitsPerMonth;
 }
