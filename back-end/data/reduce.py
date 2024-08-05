@@ -25,4 +25,4 @@ top_10_percent_data = data.head(top_10_percent_rows)
 # Write the top 10% of the data to a new CSV file
 top_10_percent_data.to_csv(output_file_path, index=False)
 
-print(f'Top 10% of the data has been saved to {output_file_path}')
+print(f'Top 1% of the data has been saved to {output_file_path}')

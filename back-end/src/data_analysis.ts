@@ -124,7 +124,8 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
         let totalTime = 0;
         let lastPosition: Vector2D = [0, 0];
         let lastTimestamp: number = 0;
-
+        
+        let trueStartTimestamp: number = -1;
         let stateStartTime: number = 0;
 
         for (const ping of pings) {
@@ -144,6 +145,10 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
                     totalTime += dt;
                 }
             }
+
+            if (visitingState === VisitingState.DURING && trueStartTimestamp === -1) {
+                trueStartTimestamp = currentTimestamp;
+            }
             
             if (visitingState !== previousState && !recordVisit) {
                 if (stateStartTime === 0) {
@@ -158,9 +163,7 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
                             }
                             break;
                         case VisitingState.DURING:
-                            if (previousState !== VisitingState.DURING) {
-                                currentDisplacement.start = currentTimestamp;
-                            }
+                            currentDisplacement.start = trueStartTimestamp !== -1 ? trueStartTimestamp : currentTimestamp;
                             break;
                     }
                     
@@ -179,6 +182,7 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
                         duration: -1,
                         speed: -1
                     };
+                    trueStartTimestamp = -1;
                 }
             } else {
                 stateStartTime = 0;
