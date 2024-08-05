@@ -106,8 +106,11 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
     const visits: Visit[] = [];
     const groupedData = rowsPerVisitorSortedByTimestamp(rawSortedfullData);
 
-    const TIME_TRESHOLD = 5 * 60; // on considère qu'une transition est faite si on passe un certain TIME_TRESHOLD (s) dans un nouvel état
-    const MAX_VISIT_TIME_GAP = 48 * 60 * 60 // si un ping est détecté à plus de MAX_VISIT_TIME_GAP secondes d'intervalles, on le considère comme une nouvelle visite.
+    // on considère qu'une transition est faite si on passe un certain TIME_TRESHOLD (s) dans un nouvel état
+    const TIME_TRESHOLD = 5 * 60; 
+
+    // si un ping est détecté à plus de MAX_VISIT_TIME_GAP (s) d'intervalles, on le considère comme une nouvelle visite.
+    const MAX_VISIT_TIME_GAP = 24 * 60 * 60 
 
     for (const visitor of Object.keys(groupedData)) {
         const pings = groupedData[visitor];
@@ -137,7 +140,6 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
             if (lastTimestamp > 0 && currentTimestamp > lastTimestamp) { 
 
                 if (dt > MAX_VISIT_TIME_GAP && visitingState === VisitingState.DURING) {
-                    console.log("Got gap of " + (dt / (24 * 60 * 60)) + " days");
                     recordVisit = true;
                 } else {
 
@@ -145,7 +147,7 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
 
                     const SPEED_THRESHOLD = 40; // Max 40 m/s pour des êtres humains en auto, approx
 
-                    if (displacement / dt < SPEED_THRESHOLD) {
+                    if (displacement / dt < SPEED_THRESHOLD) { // si au-delà, donnée aberrante
                         totalDisplacement += displacement;
                         totalTime += dt;
                     }
@@ -212,18 +214,17 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
         currentDisplacement.speed = totalDisplacement / totalTime;
         visits.push(currentDisplacement);
     }
+
+    function getVisitingStateFromDt(dt: number) {
+        if (dt == 0)
+            return VisitingState.DURING;
+        else if (dt < 0)
+            return VisitingState.AFTER;
+        
+        return VisitingState.BEFORE;
+    }
 }
 
-
-
-function getVisitingStateFromDt(dt: number) {
-    if (dt == 0)
-        return VisitingState.DURING;
-    else if (dt < 0)
-        return VisitingState.AFTER;
-    
-    return VisitingState.BEFORE;
-}
 
 /**
  * Retourne les rangées regroupées par visiteur et triées en ordre croissant de timestamp
