@@ -14,7 +14,7 @@ app.use(cors(corsOptions));
 app.get('/graphs', (req, res) => {
     console.log("Received request for metrics...");
     analyze_csv().then((results) => {
-        console.log("Sending metrics...");
+        console.log("Sending metrics.");
         res.json(results);
     })
     .catch((error) => {
