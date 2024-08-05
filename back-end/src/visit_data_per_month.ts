@@ -7,6 +7,8 @@ export function visitCountsPerMonth(visitsPerMonth: { [key: string]: Visit[]; })
     const visitsPerMonthGraphData = monthlyGraph('Visites par mois', visitCounts);
     return visitsPerMonthGraphData;
 }
+
+
 export function visitorCountsPerMonth(visitsPerMonth: { [key: string]: Visit[]; }) {
 
     const sortedKeys = Object.keys(visitsPerMonth).sort();
@@ -24,6 +26,8 @@ export function visitorCountsPerMonth(visitsPerMonth: { [key: string]: Visit[]; 
     const visitorsPerMonthGraphData = monthlyGraph('Visiteurs par mois', visitorCounts);
     return visitorsPerMonthGraphData;
 }
+
+
 export function visitLengthPerMonth(visitsPerMonth: { [key: string]: Visit[]; }) {
     const sortedKeys = Object.keys(visitsPerMonth).sort();
 
@@ -41,6 +45,8 @@ export function visitLengthPerMonth(visitsPerMonth: { [key: string]: Visit[]; })
     const visitLengthPerMonthGraphData = monthlyGraph('Durée moyenne (h) des visites par mois', averageVisitLength);
     return visitLengthPerMonthGraphData;
 }
+
+
 export function averageSpeedPerMonth(visitsPerMonth: { [key: string]: Visit[]; }) {
     const sortedKeys = Object.keys(visitsPerMonth).sort();
 
@@ -55,6 +61,8 @@ export function averageSpeedPerMonth(visitsPerMonth: { [key: string]: Visit[]; }
     const visitLengthPerMonthGraphData = monthlyGraph('Vitesse moyenne (km/h) des déplacements par mois', averageSpeed);
     return visitLengthPerMonthGraphData;
 }
+
+
 function monthlyGraph(title: string, data: number[]) {
     const perMonthGraphData: GraphData = {
         title: title,
