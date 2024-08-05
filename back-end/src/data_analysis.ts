@@ -28,7 +28,7 @@ export function analyze_csv() : Promise<{}> {
                 const visits = getVisits(results);
                 const visitsPerMonth = getVisitsPerMonth(visits)
                 const visitLengthPerMonthGraphData = visitLengthPerMonth(visitsPerMonth);
-                const averageVisitLentgh = visitLengthPerMonthGraphData.data.reduce((acc, val) => acc + val, 0);
+                const averageVisitLentgh = visitLengthPerMonthGraphData.data.reduce((acc, val) => acc + val, 0) / 12;
 
                 const graphData: GraphData[] = [
                     visitCountsPerMonth(visitsPerMonth),
