@@ -145,12 +145,8 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
 
                     let displacement = haversineDistance(currentPosition, lastPosition);
 
-                    const SPEED_THRESHOLD = 40; // Max 40 m/s pour des êtres humains en auto, approx
-
-                    if (displacement / dt < SPEED_THRESHOLD) { // si au-delà, donnée aberrante
-                        totalDisplacement += displacement;
-                        totalTime += dt;
-                    }
+                    totalDisplacement += displacement;
+                    totalTime += dt;
                 }
             }
             
@@ -205,9 +201,6 @@ function getVisits(rawSortedfullData: RawDataRow[]): Visit[] {
     return visits;
 
     function addVisit(currentDisplacement: Visit, ping: RawDataRow, totalDisplacement: number, totalTime: number) {
-        if (totalTime === 0) {
-            return;
-        }
 
         currentDisplacement.duration = ping.timestamp - currentDisplacement.start;
         currentDisplacement.end = ping.timestamp;
